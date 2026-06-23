@@ -1,0 +1,9 @@
+.github/
+.husky/
+.vscode/
+nais/
+test-results/
+.editorconfig
+biome.json
+.gitignore
+*.md

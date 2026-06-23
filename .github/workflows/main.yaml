@@ -1,0 +1,112 @@
+name: Build and run
+
+on:
+  workflow_dispatch:
+    inputs:
+      run-tests:
+        description: 'Run after build?'
+        required: true
+        default: true
+        type: boolean
+  workflow_call:
+    inputs:
+      run-tests:
+        description: 'Run after build?'
+        required: true
+        default: false
+        type: boolean
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build E2E image (${{ github.ref_name }})
+    permissions:
+      contents: read
+      id-token: write
+      packages: read
+    outputs:
+      image: ${{ steps.image-info.outputs.image }}
+      version: ${{ steps.image-tag.outputs.sha }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile --ignore-scripts
+        env:
+          READER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Typecheck
+        run: bun typecheck
+
+      - name: Lint
+        run: bun lint
+
+      - name: Get image tag
+        id: image-tag
+        shell: bash
+        run: |
+          SHA=$(git rev-parse --short HEAD)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "tag=latest,$SHA" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$SHA" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build and publish image
+        uses: nais/docker-build-push@v0
+        id: docker-build-push
+        with:
+          team: klage
+          tag: ${{ steps.image-tag.outputs.tag }}
+          build_args: |
+            CI=true
+
+      - name: Image info
+        id: image-info
+        shell: bash
+        # Replace auto-generated image tag with custom tag
+        run: echo "image=$(echo '${{ steps.docker-build-push.outputs.image }}' | sed 's/:.*$/:${{ steps.image-tag.outputs.sha }}/')" >> $GITHUB_OUTPUT
+
+  e2e_tests:
+    name: Run E2E tests (${{ github.ref_name }})
+    needs: build
+    if: ${{ inputs.run-tests || github.event_name == 'push' }}
+    permissions:
+      contents: read
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Generate UUID
+        id: uuid
+        shell: bash
+        run: echo "uuid=$(uuidgen)" >> $GITHUB_OUTPUT
+
+      - name: Run E2E tests
+        uses: nais/deploy/actions/deploy@v2
+        env:
+          CLUSTER: dev-gcp
+          VAR: jobid=${{ steps.uuid.outputs.uuid }},image=${{ needs.build.outputs.image }},version=${{ needs.build.outputs.version }},github_actor=${{ github.actor }},github_repository=${{ github.repository }}
+          TEAM: klage
+          RESOURCE: nais/e2e-job.yaml
+
+      - name: Check E2E job status
+        uses: navikt/klage-job-status/action@main
+        with:
+          api_key: ${{ secrets.STATUS_API_KEY }}
+          job_id: ${{ steps.uuid.outputs.uuid }}
+          fail: true
+          fail_on_unknown: true

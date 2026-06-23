@@ -1,0 +1,38 @@
+apiVersion: nais.io/v1
+kind: Naisjob
+metadata:
+  name: kaptein-e2e-{{jobid}}
+  namespace: klage
+  labels:
+    team: klage
+    e2e: kaptein
+    job_id: {{ jobid }}
+spec:
+  ttl: 6m
+  backoffLimit: 0
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 8000m
+      memory: 8Gi
+  image: {{ image }}
+  env:
+    - name: JOB_ID
+      value: "{{jobid}}"
+    - name: VERSION
+      value: "{{version}}"
+    - name: GITHUB_ACTOR
+      value: "{{github_actor}}"
+    - name: GITHUB_REPOSITORY
+      value: "{{github_repository}}"
+  envFrom:
+    - secret: kaka-e2e-test-users
+    - secret: slack-e2e-secrets
+    - configmap: slack-e2e-configmap
+    - secret: klage-job-status-write-api-key
+  accessPolicy:
+    outbound:
+      external:
+        - host: kaptein.intern.dev.nav.no
