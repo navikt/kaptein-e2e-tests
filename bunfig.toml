@@ -5,4 +5,4 @@ ignoreScripts = true
 minimumReleaseAgeExcludes = ["@navikt/klage-e2e-reporters"]
 
 [install.scopes]
-"@navikt" = { url = "https://npm.pkg.github.com", token = "$READER_TOKEN" }
+"@navikt" = { url = "https://npm.pkg.github.com" }
