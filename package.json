@@ -13,7 +13,7 @@
     "lint": "biome check"
   },
   "dependencies": {
-    "@navikt/klage-e2e-reporters": "2.0.0",
+    "@navikt/klage-e2e-reporters": "2.1.2",
     "@playwright/test": "1.63.0",
     "date-fns": "4.4.0"
   },
